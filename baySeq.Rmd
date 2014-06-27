@@ -1,0 +1,32 @@
+---
+title: "bayesseq"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+rm(list=ls())
+source("http://bioconductor.org/biocLite.R")
+source("http://stevenbsmith.net/source/load_R_enviornment_vars.R")
+library(baySeq)
+## For multiple cores. Set cl <- NULL if snow cant be used
+library(snow)
+cl <- makeCluster(4, "SOCK")
+
+```
+Load simulated data, as per vinette, although I should play with other data set used in DEseq to see how it compares
+```{r}
+data(simData)
+simData[1:10,] ## as per vinette. The data are simulated such that the first hundred counts show differential expression between the first five libraries and the second five libraries
+replicates <- c("simA", "simA", "simA", "simA", "simA","simB", "simB", "simB", "simB", "simB")
+groups <- list(NDE = c(1,1,1,1,1,1,1,1,1,1),DE = c(1,1,1,1,1,2,2,2,2,2))
+```
+
+
+```{r, echo=FALSE}
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
