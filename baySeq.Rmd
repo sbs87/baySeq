@@ -12,6 +12,7 @@ rm(list=ls())
 source("http://bioconductor.org/biocLite.R")
 source("http://stevenbsmith.net/source/load_R_enviornment_vars.R")
 library(baySeq)
+#biocLite("baySeq")
 ## For multiple cores. Set cl <- NULL if snow cant be used
 library(snow)
 cl <- makeCluster(4, "SOCK")
@@ -23,10 +24,89 @@ data(simData)
 simData[1:10,] ## as per vinette. The data are simulated such that the first hundred counts show differential expression between the first five libraries and the second five libraries
 replicates <- c("simA", "simA", "simA", "simA", "simA","simB", "simB", "simB", "simB", "simB")
 groups <- list(NDE = c(1,1,1,1,1,1,1,1,1,1),DE = c(1,1,1,1,1,2,2,2,2,2))
+## Now combine count data and groups into one object
+CD <- new("countData",data=simData, replicates=replicates, groups=groups)
+```
+
+Now, for some more heavy lifting. Note the following need to be dug a bit more:
+* getLibsizes
+* getPriors.NB
+* getLikelihoods.NB
+* topCounts
+* plotPosteriors
+* NOTE that there are Paired Data Analysis approach as well!
+
+Start with getLibsizes:
+```{r}
+(libsizes(CD) <-getLibsizes(CD))
+
+```
+#### getLibsizes breakdown
+```{r}
+getLibsizes
+```
+
+MA Plot, but note that the DE and non DE are known a priori
+```{r}
+plotMA.CD(CD, samplesA = "simA", samplesB = "simB",col = c(rep("red", 100), rep("black", 900)))
+CD@annotation <- data.frame(name=paste("count",1:1000,sep="_"))
 ```
 
 
-```{r, echo=FALSE}
+Now for the good stuff. *NB* estimation
+Emperical distribution and parameters of NB are bootstrapped from data... involves a quasi-likelihood approach
+See text, pg 5 for additional info. Will need to drill into this a bit more. Something about not being able to calc priors with conjugate. Different slots and suchs. 
+```{r}
+CD <- getPriors.NB(CD,samplesize=1000,estimation="QL",cl=cl)
+head(CD@priors)
+CD@priors$priors
+CD@priors$sampled
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+#### getPriors.NB breakdwon
+```{r}
+getPriors.NB
+```
+Now, get likelihoods
+```{r}
+CD <-getLikelihoods.NB(CD, pET='BIC',cl=cl)
+CD@estProps ## Estimated proportion of DE with NB assumption, priors estimated by ML. Note that the actual prop is 10%
+CD@posteriors[1:10,]
+CD@posteriors[101:110,]
+```
+#### getLikelihoods.NB breakdown
+```{r}
+getLikelihoods.NB
+```
+#### topCounts breakdown
+```{r}
+topCounts(CD,group="DE")
+topCounts
+```
+#### plotPosteriors breakdown
+```{r}
+plotPosteriors(CD, group="DE",col=c(rep("red",100),rep("black",900)))
+plotPosteriors
+```
+### Paired
+Make sure to break this out in future. Will also need to understand what they are doing/how it differs. 
+The main difference seems to be the use of a Beta prior distribution for the parameters. 
+
+```{r}
+data(pairData)
+pairCD <- new("pairedData", data = pairData[,1:4], pairData = pairData[,5:8],replicates = c(1,1,2,2),groups = list(NDE = c(1,1,1,1), DE = c(1,1,2,2)))
+(libsizes(pairCD) <- getLibsizes(pairCD))
+pairCD <- getPriors.BB(pairCD, samplesize = 1000, cl = cl)
+#The `nullProps' parameter indicates that the proportion of counts observed in the first member of a non- diferentially expressed pair is 0.5.
+pairCD <- getLikelihoods.BB(pairCD, pET = 'BIC', nullProps = 0.5, cl = cl)
+topCounts(pairCD, group = 2)
+topCounts(pairCD, group = 1)
+```
+Cleanup
+```{r}
+if(!is.null(cl)) stopCluster(cl)
+```
+
+[1] http://www.biomedcentral.com/1471-2105/11/422 "Thomas J. Hardcastle and Krystyna A. Kelly. baySeq: Empirical Bayesian Methods For Identifying Differential Expression In Sequence Count Data.BMC Bioinformatics (2010)."
+[2] http://www.sciencemag.org/content/328/5980/872.short "Attila Molnar and Charles W. Bassett and Thomas J. Hardcastle and Ruth Dunn and David C. Bauclombe Small silencing RNAs in plants are mobile and direct epigenetic modifcation in recipient cells. Science (2010)."
+[3] "Mark Robinson edgeR: Methods for diferential expression in digital gene expression datasets. Bioconductor."
